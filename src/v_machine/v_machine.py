@@ -26,6 +26,7 @@ class GUI:
     def __init__(
         self,
         video_dir,
+        file_dir,
         enable_profile=False,
         max_fps=30,
     ):
@@ -43,8 +44,13 @@ class GUI:
 
         self.setup_mtd_video(mtd)
         self.tk = tk.Tk()
+        self.tk.title("Visual Loop Machine")
 
-        self.image_size = (400, 400)
+        icon_dir = os.path.join(file_dir, "../../v_machine_icon.png")
+        icon = tk.PhotoImage(file=icon_dir)
+        self.tk.iconphoto(False, icon)
+
+        self.image_size = (512, 512)
 
         self.canvas = tk.Canvas(self.tk, width=700, height=600)
         self.canvas.pack(fill="both", expand=True)
@@ -65,7 +71,7 @@ class GUI:
         img = orig_img.resize(self.image_size, Image.HAMMING)
         self.photoImg = ImageTk.PhotoImage(img)
         self.x_loc = 350
-        self.y_loc = 300
+        self.y_loc = 260
         self.img_container = self.canvas.create_image(
             self.x_loc, self.y_loc, anchor=tk.CENTER, image=self.photoImg
         )
@@ -119,6 +125,7 @@ class GUI:
     @lru_cache(maxsize=500)
     def get_diff_image(self, mtd, dim0, dim1, dir):
         if mtd.diff_array[dim0][dim1][dir] is None:
+            print(f"no diff for {dim0}, {dim1}, {dir}")
             return None
         diff_image = (
             np.asarray(Image.open(mtd.diff_array[dim0][dim1][dir]), dtype=np.int16)
@@ -134,7 +141,6 @@ class GUI:
         fp.close()
         if q is not None:
             q.put(mtd)
-            print(f"finish put")
         return mtd
 
     def down(self, event=None):
@@ -184,7 +190,7 @@ class GUI:
         return
 
     def end_fullscreen(self, event=None):
-        self.image_size = (400, 400)
+        self.image_size = (512, 512)
         self.state = False
         self.tk.attributes("-fullscreen", False)
         self.full_size_img = False
@@ -239,6 +245,8 @@ class GUI:
 
     def update(self, force=False):
         if self.next is True or force:
+            dim_1_dir = self.dim_1_dir
+            dim_0_dir = self.dim_0_dir
             if self.load_next:
                 self.load_next_video()
             elif self.load_previous:
@@ -251,18 +259,18 @@ class GUI:
             # First check if target img idx is key frame
             target_img_idx = self.current_img_idx.copy()
 
-            if self.dim_1_dir == 1:
+            if dim_1_dir == 1:
                 if target_img_idx[1] == self.mtd_shape[1] - 1:
-                    self.dim_0_dir = 1
+                    dim_0_dir = 1
                 else:
                     target_img_idx[1] += 1
-            elif self.dim_1_dir == -1:
+            elif dim_1_dir == -1:
                 if target_img_idx[1] == 0:
-                    self.dim_0_dir = 1
+                    dim_0_dir = 1
                 else:
                     target_img_idx[1] -= 1
 
-            if self.dim_0_dir == 1:
+            if dim_0_dir == 1:
                 target_img_idx[0] = (target_img_idx[0] + 1) % self.mtd_shape[0]
 
             keyframe = self.get_key_frame(self.mtd, tuple(target_img_idx))
@@ -272,7 +280,7 @@ class GUI:
             # Use difference to generate current frame
             else:
                 # first move in dimension 1
-                if self.dim_1_dir == 1:
+                if dim_1_dir == 1:
                     if not self.current_img_idx[1] == self.mtd_shape[1] - 1:
                         next_img_idx = self.current_img_idx.copy()
                         next_img_idx[1] += 1
@@ -295,7 +303,7 @@ class GUI:
                             ).astype(np.uint8)
                         self.current_img_idx = next_img_idx
 
-                elif self.dim_1_dir == -1:
+                elif dim_1_dir == -1:
                     if not self.current_img_idx[1] == 0:
                         next_img_idx = self.current_img_idx.copy()
                         next_img_idx[1] -= 1
@@ -317,7 +325,7 @@ class GUI:
                                 )
                             ).astype(np.uint8)
                         self.current_img_idx = next_img_idx
-                if self.dim_0_dir == 1:
+                if dim_0_dir == 1:
                     # move in dimension 0
                     diff_image = self.get_diff_image(
                         mtd=self.mtd,
@@ -384,7 +392,7 @@ class SoundMonitor:
 
         self.gui.set_next_image(dim_1_dir=dim_1_dir, dim_0_dir=dim_0_dir)
         self.last_n.append(amplitude)
-        self.last_n = self.last_n[-100:]
+        self.last_n = self.last_n[-200:]
 
         self.callback_count += 1
         if self.callback_count % 100 == 0:
@@ -407,7 +415,7 @@ if __name__ == "__main__":
     max_fps = 30
     file_dir = os.path.dirname(__file__)
     video_dir = os.path.join(file_dir, "../../mtd_videos")
-    gui = GUI(video_dir=video_dir)
+    gui = GUI(video_dir=video_dir, file_dir=file_dir)
     sm = SoundMonitor(gui)
     sm.run()
 

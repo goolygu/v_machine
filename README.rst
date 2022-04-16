@@ -14,7 +14,6 @@ Create virtual environment and install v_machine
     $ git clone git@github.com:goolygu/v_machine.git
     $ cd v_machine
     $ make venv
-    $ pip3 install -r requirments.txt
 
 Place mtd videos to play under the mtd_video folder and run the following command to start.
 
