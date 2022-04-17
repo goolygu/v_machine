@@ -14,12 +14,13 @@ Create virtual environment and install v_machine
 
 .. code-block:: console
 
-    $ git clone git@github.com:goolygu/v_machine.git
+    $ git clone https://github.com/goolygu/v_machine.git
     $ cd v_machine
     $ make venv
 
 Place mtd videos to play under the mtd_video folder (Samples are provided.) You can download mtd videos
 created by me here https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing
+
 Activate virtual environment and run the following command to start
 
 .. code-block:: console
