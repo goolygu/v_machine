@@ -44,9 +44,9 @@ class GUI:
 
         self.setup_mtd_video(mtd)
         self.tk = tk.Tk()
-        self.tk.title("Visual Loop Machine")
+        self.tk.title("Visual Loop Machine by Li Yang Ku")
 
-        icon_dir = os.path.join(file_dir, "../../v_machine_icon.png")
+        icon_dir = os.path.join(file_dir, "../../v_machine_icon.gif")
         icon = tk.PhotoImage(file=icon_dir)
         self.tk.iconphoto(False, icon)
 
@@ -57,21 +57,29 @@ class GUI:
         self.canvas.configure(background="black")
         self.canvas.configure(highlightbackground="black")
 
+        self.instruction_loc = [350, 555]
         self.instruction = tk.Label(
             self.canvas,
-            text="F11: toggle fullscreen, → next video, ← last video, ↑ increase change, ↓ decrease change.\n\nVisual Loop Machine by Li Yang Ku",
+            text="→ next video, ← last video, ↑ increase change, ↓ decrease change.\n\nF11: toggle fullscreen, Esc: exit fullscreen",
             fg="white",
             bg="black",
         )
+
         self.instruction_label = self.canvas.create_window(
-            350, 550, window=self.instruction
+            self.instruction_loc[0], self.instruction_loc[1], window=self.instruction
         )
+        self.button = tk.Button(
+            self.tk, text="Full Screen", command=self.start_full_screen, bg="#6BEBC0"
+        )
+        self.button_loc = [100, 557]
+        self.button.place(x=self.button_loc[0], y=self.button_loc[1])
 
         orig_img = Image.fromarray(self.current_frame)
         img = orig_img.resize(self.image_size, Image.HAMMING)
         self.photoImg = ImageTk.PhotoImage(img)
-        self.x_loc = 350
-        self.y_loc = 260
+        self.default_img_loc = [350, 260]
+        self.x_loc = self.default_img_loc[0]
+        self.y_loc = self.default_img_loc[1]
         self.img_container = self.canvas.create_image(
             self.x_loc, self.y_loc, anchor=tk.CENTER, image=self.photoImg
         )
@@ -164,14 +172,12 @@ class GUI:
     def toggle_fullscreen(self, event=None):
         if self.state is True:
             self.end_fullscreen()
-            self.instruction_label = self.canvas.create_window(
-                350, 550, window=self.instruction
-            )
         else:
-            self.canvas.delete(self.instruction_label)
             self.start_full_screen()
 
     def start_full_screen(self, event=None):
+        self.canvas.delete(self.instruction_label)
+        self.button.place_forget()
         canvas_size = [self.canvas.winfo_width(), self.canvas.winfo_height()]
         self.state = True
         self.tk.attributes("-fullscreen", True)
@@ -194,9 +200,13 @@ class GUI:
         self.state = False
         self.tk.attributes("-fullscreen", False)
         self.full_size_img = False
-        self.x_loc = 350
-        self.y_loc = 300
+        self.x_loc = self.default_img_loc[0]
+        self.y_loc = self.default_img_loc[1]
         self.canvas.coords(self.img_container, self.x_loc, self.y_loc)
+        self.instruction_label = self.canvas.create_window(
+            self.instruction_loc[0], self.instruction_loc[1], window=self.instruction
+        )
+        self.button.place(x=self.button_loc[0], y=self.button_loc[1])
         if self.enable_profile:
             s = io.StringIO()
             sortby = SortKey.CUMULATIVE
@@ -357,7 +367,7 @@ class GUI:
             time.sleep(sleep_time)
 
             t_start = time.time()
-            self.tk.update_idletasks()
+            self.tk.update()
             self._estimated_image_time = time.time() - t_start
             self._previous_t = time.time()
 
@@ -429,7 +439,6 @@ if __name__ == "__main__":
             count += 1
 
             if count % 10 == 0:
-                gui.tk.update()
                 count = 0
                 if previous_10_t is None:
                     previous_10_t = time.time()

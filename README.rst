@@ -18,10 +18,11 @@ Create virtual environment and install v_machine
     $ cd v_machine
     $ make venv
 
-Place mtd videos to play under the mtd_video folder and run the following command to start. You can download mtd videos
+Place mtd videos to play under the mtd_video folder (Samples are provided.) You can download mtd videos
 created by me here https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing
+Activate virtual environment and run the following command to start
 
 .. code-block:: console
 
+    $ source venv/bin/activate
     $ python v_machine.py
-

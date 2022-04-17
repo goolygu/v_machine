@@ -20,7 +20,7 @@ help:
 venv:
 	@rm -Rf venv
 	@python3 -m venv venv --prompt v_machine
-	@/bin/bash -c "source venv/bin/activate && pip install pip --upgrade && pip install -r requirements.dev.txt && pip install -e ."
+	@/bin/bash -c "source venv/bin/activate && pip install pip --upgrade && pip install -e ."
 	@echo "Enter virtual environment using:\n\n\t$ source venv/bin/activate\n"
 
 
