@@ -12,7 +12,7 @@ import tkinter as tk
 from functools import lru_cache
 from multiprocessing import Process, Queue
 from pstats import SortKey
-
+import screeninfo
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance, ImageTk
@@ -52,15 +52,15 @@ class GUI:
 
         self.image_size = (512, 512)
 
-        self.canvas = tk.Canvas(self.tk, width=700, height=600)
+        self.canvas = tk.Canvas(self.tk, width=700, height=610)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.configure(background="black")
         self.canvas.configure(highlightbackground="black")
 
-        self.instruction_loc = [350, 555]
+        self.instruction_loc = [355, 555]
         self.instruction = tk.Label(
             self.canvas,
-            text="→ next video, ← last video, ↑ increase change, ↓ decrease change.\n\nF11: toggle fullscreen, Esc: exit fullscreen",
+            text="→ next video, ← last video, ↑ increase change, ↓ decrease change.\n\nLinux: F11: toggle fullscreen, Esc: exit fullscreen \nMac: Use maximize window button to switch to fullscreen.",
             fg="white",
             bg="black",
         )
@@ -68,11 +68,6 @@ class GUI:
         self.instruction_label = self.canvas.create_window(
             self.instruction_loc[0], self.instruction_loc[1], window=self.instruction
         )
-        self.button = tk.Button(
-            self.tk, text="Full Screen", command=self.start_full_screen, bg="#6BEBC0"
-        )
-        self.button_loc = [100, 557]
-        self.button.place(x=self.button_loc[0], y=self.button_loc[1])
 
         orig_img = Image.fromarray(self.current_frame)
         img = orig_img.resize(self.image_size, Image.HAMMING)
@@ -84,7 +79,7 @@ class GUI:
             self.x_loc, self.y_loc, anchor=tk.CENTER, image=self.photoImg
         )
 
-        self.state = False
+        self.fullscreen_state = False
         self.tk.bind("<F11>", self.toggle_fullscreen)
         self.tk.bind("<Escape>", self.end_fullscreen)
         self.tk.bind("<Key-Up>", self.up)
@@ -108,6 +103,7 @@ class GUI:
         self.max_fps = max_fps
         self._previous_t = time.time()
         self._estimated_image_time = 0
+        self.previous_canvas_size = None
 
     def clear_mtd_memory(self):
         if hasattr(self, "mtd"):
@@ -169,35 +165,65 @@ class GUI:
         if not self.load_next:
             self.load_previous = True
 
+    def get_monitor_size(self):
+        monitors = screeninfo.get_monitors()
+        x = self.tk.winfo_x()
+        y = self.tk.winfo_y()
+        for m in monitors:
+            if m.x <= x <= m.width + m.x and m.y <= y <= m.height + m.y:
+                return [m.width, m.height]
+        return [m[0].width, m[0].height]
+
+    def check_screen_size(self):
+
+        current_canvas_size = [self.canvas.winfo_width(), self.canvas.winfo_height()]
+        print(f"current {current_canvas_size} , {self.previous_canvas_size}")
+        if current_canvas_size == self.previous_canvas_size:
+            return
+
+        monitor_size = self.get_monitor_size()
+        if self.fullscreen_state is False:
+            print(f"{[self.canvas.winfo_width(), self.canvas.winfo_height()]}, {self.get_monitor_size()}")
+            if current_canvas_size == monitor_size:
+                self.start_full_screen()
+        if self.fullscreen_state is True:
+            if current_canvas_size == monitor_size:
+                self.resize_canvas()
+            else:
+                self.end_fullscreen()
+
+        self.previous_canvas_size = current_canvas_size
+
     def toggle_fullscreen(self, event=None):
-        if self.state is True:
+        if self.fullscreen_state is True:
             self.end_fullscreen()
         else:
             self.start_full_screen()
 
+    def resize_canvas(self):
+        size = min([self.canvas.winfo_width(), self.canvas.winfo_height()])
+        self.x_loc = int(self.canvas.winfo_width() / 2)
+        self.y_loc = int(self.canvas.winfo_height() / 2)
+        self.image_size = (size, size)
+        self.canvas.coords(self.img_container, self.x_loc, self.y_loc)
+
     def start_full_screen(self, event=None):
         self.canvas.delete(self.instruction_label)
-        self.button.place_forget()
         canvas_size = [self.canvas.winfo_width(), self.canvas.winfo_height()]
-        self.state = True
+        self.fullscreen_state = True
         self.tk.attributes("-fullscreen", True)
         self.full_size_img = True
         while True:
             self.tk.update()
             # check if canvas size changed before changing image size
             if canvas_size != [self.canvas.winfo_width(), self.canvas.winfo_height()]:
-                size = min([self.canvas.winfo_width(), self.canvas.winfo_height()])
-                self.x_loc = int(self.canvas.winfo_width() / 2)
-                self.y_loc = int(self.canvas.winfo_height() / 2)
-                self.image_size = (size, size)
-                self.canvas.coords(self.img_container, self.x_loc, self.y_loc)
-
+                self.resize_canvas()
                 break
         return
 
     def end_fullscreen(self, event=None):
         self.image_size = (512, 512)
-        self.state = False
+        self.fullscreen_state = False
         self.tk.attributes("-fullscreen", False)
         self.full_size_img = False
         self.x_loc = self.default_img_loc[0]
@@ -206,7 +232,6 @@ class GUI:
         self.instruction_label = self.canvas.create_window(
             self.instruction_loc[0], self.instruction_loc[1], window=self.instruction
         )
-        self.button.place(x=self.button_loc[0], y=self.button_loc[1])
         if self.enable_profile:
             s = io.StringIO()
             sortby = SortKey.CUMULATIVE
@@ -431,22 +456,23 @@ if __name__ == "__main__":
 
     count = 0
 
-    previous_10_t = None
+    previous_t = None
     while True:
 
         updated = gui.update()
         if updated:
             count += 1
 
-            if count % 10 == 0:
+            if count % 30 == 0:
+                gui.check_screen_size()
                 count = 0
-                if previous_10_t is None:
-                    previous_10_t = time.time()
+                if previous_t is None:
+                    previous_t = time.time()
                 else:
-                    current_10_t = time.time()
-                    elapse_sum = current_10_t - previous_10_t
-                    previous_10_t = current_10_t
-                    print(f"frame per second {10 / elapse_sum}")
+                    current_t = time.time()
+                    elapse_sum = current_t - previous_t
+                    previous_t = current_t
+                    print(f"frame per second {30 / elapse_sum}")
 
         else:
             time.sleep(0.001)
