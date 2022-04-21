@@ -7,22 +7,24 @@ import pickle
 import pstats
 import queue
 import random
+import sys
 import time
-import tkinter as tk
 from functools import lru_cache
 from multiprocessing import Process, Queue
 from pstats import SortKey
-import screeninfo
 import numpy as np
 import sounddevice as sd
-from PIL import Image, ImageEnhance, ImageTk
+from PIL import Image, ImageEnhance
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel
+from PyQt5.Qt import Qt
+from PyQt5 import QtGui
 
 
 def get_key_frame_array(key_frame_buffer):
     return np.asarray(Image.open(key_frame_buffer), dtype=np.uint8)
 
 
-class GUI:
+class GUI(QWidget):
     def __init__(
         self,
         video_dir,
@@ -30,6 +32,7 @@ class GUI:
         enable_profile=False,
         max_fps=30,
     ):
+        super().__init__()
         self.loading_stage = 0
         self.video_dir = video_dir
         self.all_video_paths = sorted(glob.glob(f"{video_dir}/*.mtd"))
@@ -41,55 +44,40 @@ class GUI:
         self.current_img_idx = None
         self.current_frame = None
         self.mtd_shape = None
-
+        self.setStyleSheet("background-color: black;")
+        self.setWindowTitle("Visual Loop Machine by Li Yang Ku")
         self.setup_mtd_video(mtd)
-        self.tk = tk.Tk()
-        self.tk.title("Visual Loop Machine by Li Yang Ku")
 
         icon_dir = os.path.join(file_dir, "../../v_machine_icon.gif")
-        icon = tk.PhotoImage(file=icon_dir)
-        self.tk.iconphoto(False, icon)
+        self.setWindowIcon(QtGui.QIcon(icon_dir))
 
         self.image_size = (512, 512)
+        self.resize(550, 610)
 
-        self.canvas = tk.Canvas(self.tk, width=700, height=610)
-        self.canvas.pack(fill="both", expand=True)
-        self.canvas.configure(background="black")
-        self.canvas.configure(highlightbackground="black")
+        self.canvas = QLabel(self)
+        self.canvas.resize(*self.image_size)
+        self.default_img_loc = [19, 19]
+        self.canvas.move(*self.default_img_loc)
 
-        self.instruction_loc = [355, 555]
-        self.instruction = tk.Label(
-            self.canvas,
-            text="→ next video, ← last video, ↑ increase change, ↓ decrease change.\n\nLinux: F11: toggle fullscreen, Esc: exit fullscreen \nMac: Use maximize window button to switch to fullscreen.",
-            fg="white",
-            bg="black",
+        self.instruction_loc = [50, 550]
+        self.instruction = QLabel(self)
+        self.instruction.setAlignment(Qt.AlignCenter)
+        self.instruction.setText(
+            "→ next video, ← last video, ↑ increase change, ↓ decrease change.\nSpace: toggle fullscreen, Esc: exit fullscreen"
         )
-
-        self.instruction_label = self.canvas.create_window(
-            self.instruction_loc[0], self.instruction_loc[1], window=self.instruction
-        )
+        self.instruction.setStyleSheet("color: white;")
+        self.instruction.move(*self.instruction_loc)
+        self.instruction.show()
 
         orig_img = Image.fromarray(self.current_frame)
         img = orig_img.resize(self.image_size, Image.HAMMING)
-        self.photoImg = ImageTk.PhotoImage(img)
-        self.default_img_loc = [350, 260]
-        self.x_loc = self.default_img_loc[0]
-        self.y_loc = self.default_img_loc[1]
-        self.img_container = self.canvas.create_image(
-            self.x_loc, self.y_loc, anchor=tk.CENTER, image=self.photoImg
+        qim = QtGui.QImage(
+            img.tobytes("raw", "RGB"), img.width, img.height, QtGui.QImage.Format_RGB888
         )
+        self.canvas.setPixmap(QtGui.QPixmap.fromImage(qim))
 
         self.fullscreen_state = False
-        self.tk.bind("<F11>", self.toggle_fullscreen)
-        self.tk.bind("<Escape>", self.end_fullscreen)
-        self.tk.bind("<Key-Up>", self.up)
-        self.tk.bind("<Key-Down>", self.down)
-        self.tk.bind("<Key-Right>", self.right)
-        self.tk.bind("<Key-Left>", self.left)
-        self.tk.update_idletasks()
-        self.tk.update()
         self.next = False
-        self.full_size_img = False
         self.dim_1_dir = 0
         self.dim_0_dir = 0
         self.threshold = 0.9
@@ -104,6 +92,20 @@ class GUI:
         self._previous_t = time.time()
         self._estimated_image_time = 0
         self.previous_canvas_size = None
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        if event.key() == Qt.Key_Space:
+            self.toggle_fullscreen()
+        elif event.key() == Qt.Key_Right:
+            self.right()
+        elif event.key() == Qt.Key_Left:
+            self.left()
+        elif event.key() == Qt.Key_Up:
+            self.up()
+        elif event.key() == Qt.Key_Down:
+            self.down()
+        elif event.key() == Qt.Key_Escape:
+            self.end_fullscreen()
 
     def clear_mtd_memory(self):
         if hasattr(self, "mtd"):
@@ -147,91 +149,52 @@ class GUI:
             q.put(mtd)
         return mtd
 
-    def down(self, event=None):
+    def down(self):
         self.threshold += 0.1
         self.threshold = min(1.1, self.threshold)
         print(f"threshold {self.threshold}")
 
-    def up(self, event=None):
+    def up(self):
         self.threshold -= 0.1
         self.threshold = max(0.5, self.threshold)
         print(f"threshold {self.threshold}")
 
-    def right(self, event=None):
+    def right(self):
         if not self.load_previous:
             self.load_next = True
 
-    def left(self, event=None):
+    def left(self):
         if not self.load_next:
             self.load_previous = True
 
-    def get_monitor_size(self):
-        monitors = screeninfo.get_monitors()
-        x = self.tk.winfo_x()
-        y = self.tk.winfo_y()
-        for m in monitors:
-            if m.x <= x <= m.width + m.x and m.y <= y <= m.height + m.y:
-                return [m.width, m.height]
-        return [m[0].width, m[0].height]
-
-    def check_screen_size(self):
-
-        current_canvas_size = [self.canvas.winfo_width(), self.canvas.winfo_height()]
-        print(f"current {current_canvas_size} , {self.previous_canvas_size}")
-        if current_canvas_size == self.previous_canvas_size:
-            return
-
-        monitor_size = self.get_monitor_size()
-        if self.fullscreen_state is False:
-            print(f"{[self.canvas.winfo_width(), self.canvas.winfo_height()]}, {self.get_monitor_size()}")
-            if current_canvas_size == monitor_size:
-                self.start_full_screen()
-        if self.fullscreen_state is True:
-            if current_canvas_size == monitor_size:
-                self.resize_canvas()
-            else:
-                self.end_fullscreen()
-
-        self.previous_canvas_size = current_canvas_size
-
-    def toggle_fullscreen(self, event=None):
+    def toggle_fullscreen(self):
         if self.fullscreen_state is True:
             self.end_fullscreen()
         else:
             self.start_full_screen()
 
-    def resize_canvas(self):
-        size = min([self.canvas.winfo_width(), self.canvas.winfo_height()])
-        self.x_loc = int(self.canvas.winfo_width() / 2)
-        self.y_loc = int(self.canvas.winfo_height() / 2)
-        self.image_size = (size, size)
-        self.canvas.coords(self.img_container, self.x_loc, self.y_loc)
-
-    def start_full_screen(self, event=None):
-        self.canvas.delete(self.instruction_label)
-        canvas_size = [self.canvas.winfo_width(), self.canvas.winfo_height()]
+    def start_full_screen(self):
+        self.instruction.hide()
         self.fullscreen_state = True
-        self.tk.attributes("-fullscreen", True)
-        self.full_size_img = True
-        while True:
-            self.tk.update()
-            # check if canvas size changed before changing image size
-            if canvas_size != [self.canvas.winfo_width(), self.canvas.winfo_height()]:
-                self.resize_canvas()
-                break
+        self.showFullScreen()
+        screen = QApplication.primaryScreen()
+        full_width = screen.size().width()
+        full_height = screen.size().height()
+        size = min([full_width, full_height])
+        self.image_size = (size, size)
+        self.canvas.resize(*self.image_size)
+        self.canvas.move((full_width - size) / 2, (full_height - size) / 2)
         return
 
-    def end_fullscreen(self, event=None):
+    def end_fullscreen(self):
         self.image_size = (512, 512)
         self.fullscreen_state = False
-        self.tk.attributes("-fullscreen", False)
-        self.full_size_img = False
-        self.x_loc = self.default_img_loc[0]
-        self.y_loc = self.default_img_loc[1]
-        self.canvas.coords(self.img_container, self.x_loc, self.y_loc)
-        self.instruction_label = self.canvas.create_window(
-            self.instruction_loc[0], self.instruction_loc[1], window=self.instruction
-        )
+        self.showNormal()
+        self.canvas.resize(*self.image_size)
+
+        self.canvas.move(*self.default_img_loc)
+        self.instruction.show()
+
         if self.enable_profile:
             s = io.StringIO()
             sortby = SortKey.CUMULATIVE
@@ -273,135 +236,123 @@ class GUI:
                 self.load_previous = False
                 self.loading_stage = 0
 
-    def set_next_image(self, dim_1_dir=0, dim_0_dir=0):
-        self.dim_1_dir = dim_1_dir
-        self.dim_0_dir = dim_0_dir
-        self.next = True
-
-    def update(self, force=False):
-        if self.next is True or force:
-            dim_1_dir = self.dim_1_dir
-            dim_0_dir = self.dim_0_dir
-            if self.load_next:
-                self.load_next_video()
-            elif self.load_previous:
-                self.load_next_video(previous=True)
-            if self.pause:
-                return False
-            if self.full_size_img and self.enable_profile:
-                self.pr.enable()
-
-            # First check if target img idx is key frame
-            target_img_idx = self.current_img_idx.copy()
-
-            if dim_1_dir == 1:
-                if target_img_idx[1] == self.mtd_shape[1] - 1:
-                    dim_0_dir = 1
-                else:
-                    target_img_idx[1] += 1
-            elif dim_1_dir == -1:
-                if target_img_idx[1] == 0:
-                    dim_0_dir = 1
-                else:
-                    target_img_idx[1] -= 1
-
-            if dim_0_dir == 1:
-                target_img_idx[0] = (target_img_idx[0] + 1) % self.mtd_shape[0]
-
-            keyframe = self.get_key_frame(self.mtd, tuple(target_img_idx))
-
-            if keyframe is not None:
-                self.current_frame = keyframe
-            # Use difference to generate current frame
-            else:
-                # first move in dimension 1
-                if dim_1_dir == 1:
-                    if not self.current_img_idx[1] == self.mtd_shape[1] - 1:
-                        next_img_idx = self.current_img_idx.copy()
-                        next_img_idx[1] += 1
-                        keyframe = self.get_key_frame(self.mtd, tuple(next_img_idx))
-                        if keyframe is not None:
-                            self.current_frame = keyframe
-                        else:
-                            diff_image = self.get_diff_image(
-                                mtd=self.mtd,
-                                dim0=self.current_img_idx[0],
-                                dim1=self.current_img_idx[1],
-                                dir=1,
-                            )
-                            self.current_frame = (
-                                np.clip(
-                                    self.current_frame.astype(np.int16) + diff_image,
-                                    0,
-                                    255,
-                                )
-                            ).astype(np.uint8)
-                        self.current_img_idx = next_img_idx
-
-                elif dim_1_dir == -1:
-                    if not self.current_img_idx[1] == 0:
-                        next_img_idx = self.current_img_idx.copy()
-                        next_img_idx[1] -= 1
-                        keyframe = self.get_key_frame(self.mtd, tuple(next_img_idx))
-                        if keyframe is not None:
-                            self.current_frame = keyframe
-                        else:
-                            diff_image = self.get_diff_image(
-                                mtd=self.mtd,
-                                dim0=self.current_img_idx[0],
-                                dim1=self.current_img_idx[1] - 1,
-                                dir=1,
-                            )
-                            self.current_frame = (
-                                np.clip(
-                                    self.current_frame.astype(np.int16) - diff_image,
-                                    0,
-                                    255,
-                                )
-                            ).astype(np.uint8)
-                        self.current_img_idx = next_img_idx
-                if dim_0_dir == 1:
-                    # move in dimension 0
-                    diff_image = self.get_diff_image(
-                        mtd=self.mtd,
-                        dim0=self.current_img_idx[0],
-                        dim1=self.current_img_idx[1],
-                        dir=0,
-                    )
-                    self.current_frame = (
-                        np.clip(
-                            self.current_frame.astype(np.int16) + diff_image, 0, 255
-                        )
-                    ).astype(np.uint8)
-
-            self.current_img_idx = target_img_idx
-
-            orig_img = Image.fromarray(self.current_frame)
-            if self.brightness != 1:
-                enhancer = ImageEnhance.Brightness(orig_img)
-                orig_img = enhancer.enhance(self.brightness)
-
-            img = orig_img.resize(self.image_size, Image.NEAREST)
-            self.photoImg = ImageTk.PhotoImage(img)
-
-            self.canvas.itemconfig(self.img_container, image=self.photoImg)
-
-            current_t = time.time()
-            elapsed = current_t - self._previous_t
-            sleep_time = max(1 / self.max_fps - elapsed - self._estimated_image_time, 0)
-            time.sleep(sleep_time)
-
-            t_start = time.time()
-            self.tk.update()
-            self._estimated_image_time = time.time() - t_start
-            self._previous_t = time.time()
-
-            self.next = False
-            if self.full_size_img and self.enable_profile:
-                self.pr.disable()
-            return True
-        else:
+    def update(self, dim_1_dir=0, dim_0_dir=0):
+        if self.load_next:
+            self.load_next_video()
+        elif self.load_previous:
+            self.load_next_video(previous=True)
+        if self.pause:
             return False
+        if self.fullscreen_state and self.enable_profile:
+            self.pr.enable()
+
+        # First check if target img idx is key frame
+        target_img_idx = self.current_img_idx.copy()
+
+        if dim_1_dir == 1:
+            if target_img_idx[1] == self.mtd_shape[1] - 1:
+                dim_0_dir = 1
+            else:
+                target_img_idx[1] += 1
+        elif dim_1_dir == -1:
+            if target_img_idx[1] == 0:
+                dim_0_dir = 1
+            else:
+                target_img_idx[1] -= 1
+
+        if dim_0_dir == 1:
+            target_img_idx[0] = (target_img_idx[0] + 1) % self.mtd_shape[0]
+
+        keyframe = self.get_key_frame(self.mtd, tuple(target_img_idx))
+
+        if keyframe is not None:
+            self.current_frame = keyframe
+        # Use difference to generate current frame
+        else:
+            # first move in dimension 1
+            if dim_1_dir == 1:
+                if not self.current_img_idx[1] == self.mtd_shape[1] - 1:
+                    next_img_idx = self.current_img_idx.copy()
+                    next_img_idx[1] += 1
+                    keyframe = self.get_key_frame(self.mtd, tuple(next_img_idx))
+                    if keyframe is not None:
+                        self.current_frame = keyframe
+                    else:
+                        diff_image = self.get_diff_image(
+                            mtd=self.mtd,
+                            dim0=self.current_img_idx[0],
+                            dim1=self.current_img_idx[1],
+                            dir=1,
+                        )
+                        self.current_frame = (
+                            np.clip(
+                                self.current_frame.astype(np.int16) + diff_image,
+                                0,
+                                255,
+                            )
+                        ).astype(np.uint8)
+                    self.current_img_idx = next_img_idx
+
+            elif dim_1_dir == -1:
+                if not self.current_img_idx[1] == 0:
+                    next_img_idx = self.current_img_idx.copy()
+                    next_img_idx[1] -= 1
+                    keyframe = self.get_key_frame(self.mtd, tuple(next_img_idx))
+                    if keyframe is not None:
+                        self.current_frame = keyframe
+                    else:
+                        diff_image = self.get_diff_image(
+                            mtd=self.mtd,
+                            dim0=self.current_img_idx[0],
+                            dim1=self.current_img_idx[1] - 1,
+                            dir=1,
+                        )
+                        self.current_frame = (
+                            np.clip(
+                                self.current_frame.astype(np.int16) - diff_image,
+                                0,
+                                255,
+                            )
+                        ).astype(np.uint8)
+                    self.current_img_idx = next_img_idx
+            if dim_0_dir == 1:
+                # move in dimension 0
+                diff_image = self.get_diff_image(
+                    mtd=self.mtd,
+                    dim0=self.current_img_idx[0],
+                    dim1=self.current_img_idx[1],
+                    dir=0,
+                )
+                self.current_frame = (
+                    np.clip(self.current_frame.astype(np.int16) + diff_image, 0, 255)
+                ).astype(np.uint8)
+
+        self.current_img_idx = target_img_idx
+
+        orig_img = Image.fromarray(self.current_frame)
+        if self.brightness != 1:
+            enhancer = ImageEnhance.Brightness(orig_img)
+            orig_img = enhancer.enhance(self.brightness)
+
+        img = orig_img.resize(self.image_size)
+
+        qim = QtGui.QImage(
+            img.tobytes("raw", "RGB"), img.width, img.height, QtGui.QImage.Format_RGB888
+        )
+
+        current_t = time.time()
+        elapsed = current_t - self._previous_t
+        sleep_time = max(1 / self.max_fps - elapsed - self._estimated_image_time, 0)
+        time.sleep(sleep_time)
+
+        t_start = time.time()
+        self.canvas.setPixmap(QtGui.QPixmap.fromImage(qim))
+        self._estimated_image_time = time.time() - t_start
+        self._previous_t = time.time()
+
+        self.next = False
+        if self.fullscreen_state and self.enable_profile:
+            self.pr.disable()
 
 
 class SoundMonitor:
@@ -425,7 +376,7 @@ class SoundMonitor:
         if 5 * amplitude > random.random() * self.gui.threshold:
             dim_0_dir = 1
 
-        self.gui.set_next_image(dim_1_dir=dim_1_dir, dim_0_dir=dim_0_dir)
+        self.gui.update(dim_1_dir=dim_1_dir, dim_0_dir=dim_0_dir)
         self.last_n.append(amplitude)
         self.last_n = self.last_n[-200:]
 
@@ -433,7 +384,7 @@ class SoundMonitor:
         if self.callback_count % 100 == 0:
             if self.now is not None:
                 elapsed = time.time() - self.now
-                print(f"sound callback per second {100 / elapsed}")
+                print(f"frame per second {100 / elapsed}")
             self.now = time.time()
 
     def run(self):
@@ -450,29 +401,9 @@ if __name__ == "__main__":
     max_fps = 30
     file_dir = os.path.dirname(__file__)
     video_dir = os.path.join(file_dir, "../../mtd_videos")
+    app = QApplication(sys.argv)
     gui = GUI(video_dir=video_dir, file_dir=file_dir)
     sm = SoundMonitor(gui)
     sm.run()
-
-    count = 0
-
-    previous_t = None
-    while True:
-
-        updated = gui.update()
-        if updated:
-            count += 1
-
-            if count % 30 == 0:
-                gui.check_screen_size()
-                count = 0
-                if previous_t is None:
-                    previous_t = time.time()
-                else:
-                    current_t = time.time()
-                    elapse_sum = current_t - previous_t
-                    previous_t = current_t
-                    print(f"frame per second {30 / elapse_sum}")
-
-        else:
-            time.sleep(0.001)
+    gui.show()
+    app.exec_()
