@@ -28,7 +28,6 @@ class GUI(QWidget):
     def __init__(
         self,
         video_dir,
-        file_dir,
         enable_profile=False,
         max_fps=30,
     ):
@@ -47,9 +46,6 @@ class GUI(QWidget):
         self.setStyleSheet("background-color: black;")
         self.setWindowTitle("Visual Loop Machine by Li Yang Ku")
         self.setup_mtd_video(mtd)
-
-        icon_dir = os.path.join(file_dir, "../../v_machine_icon.gif")
-        self.setWindowIcon(QtGui.QIcon(icon_dir))
 
         self.image_size = (512, 512)
         self.resize(550, 610)
@@ -334,7 +330,7 @@ class GUI(QWidget):
             enhancer = ImageEnhance.Brightness(orig_img)
             orig_img = enhancer.enhance(self.brightness)
 
-        img = orig_img.resize(self.image_size)
+        img = orig_img.resize(self.image_size, Image.NEAREST)
 
         qim = QtGui.QImage(
             img.tobytes("raw", "RGB"), img.width, img.height, QtGui.QImage.Format_RGB888
@@ -402,7 +398,9 @@ if __name__ == "__main__":
     file_dir = os.path.dirname(__file__)
     video_dir = os.path.join(file_dir, "../../mtd_videos")
     app = QApplication(sys.argv)
-    gui = GUI(video_dir=video_dir, file_dir=file_dir)
+    icon_dir = os.path.join(file_dir, "../../v_machine_icon.gif")
+    app.setWindowIcon(QtGui.QIcon(icon_dir))
+    gui = GUI(video_dir=video_dir)
     sm = SoundMonitor(gui)
     sm.run()
     gui.show()
