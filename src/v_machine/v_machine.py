@@ -15,9 +15,10 @@ from pstats import SortKey
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel
-from PyQt5.Qt import Qt
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QComboBox
+from PyQt5.Qt import Qt, QPoint
 from PyQt5 import QtGui
+from PyQt5.QtGui import QGuiApplication
 
 
 def get_key_frame_array(key_frame_buffer):
@@ -48,22 +49,31 @@ class GUI(QWidget):
         self.setup_mtd_video(mtd)
 
         self.image_size = (512, 512)
-        self.resize(550, 610)
+        self.resize(550, 630)
 
         self.canvas = QLabel(self)
         self.canvas.resize(*self.image_size)
         self.default_img_loc = [19, 19]
         self.canvas.move(*self.default_img_loc)
 
-        self.instruction_loc = [50, 550]
+        self.instruction_loc = [50, 545]
         self.instruction = QLabel(self)
-        self.instruction.setAlignment(Qt.AlignCenter)
+
         self.instruction.setText(
-            "→ next video, ← last video, ↑ increase change, ↓ decrease change.\nSpace: toggle fullscreen, Esc: exit fullscreen"
+            "→ next video, ← last video, ↑ increase change, ↓ decrease change\nSpace: toggle fullscreen, Esc: exit fullscreen\n\nInput source:"
         )
         self.instruction.setStyleSheet("color: white;")
         self.instruction.move(*self.instruction_loc)
         self.instruction.show()
+
+        self.combobox_loc = [150, 590]
+        self.combobox = QComboBox(self)
+        self.combobox.move(*self.combobox_loc)
+        self.combobox.resize(350, 30)
+        self.combobox.setStyleSheet(
+            "color: #75F5CA; selection-color: white; selection-background-color: #4DCDA2"
+        )
+        self.combobox.show()
 
         orig_img = Image.fromarray(self.current_frame)
         img = orig_img.resize(self.image_size, Image.HAMMING)
@@ -88,6 +98,31 @@ class GUI(QWidget):
         self._previous_t = time.time()
         self._estimated_image_time = 0
         self.previous_canvas_size = None
+
+        self.sound_monitor = None
+        self.cidx_mapping = {}
+
+    def set_sound_monitor(self, sound_monitor):
+        self.sound_monitor = sound_monitor
+        self.cidx_mapping = {}
+        for i, device in enumerate(self.sound_monitor.devices):
+            if device["max_input_channels"] > 0:
+                self.cidx_mapping[self.combobox.count()] = i
+                self.combobox.addItem(device["name"])
+
+        default_idx = self.combobox.count() - 1
+        self.combobox.setCurrentIndex(default_idx)
+        self.sound_monitor.current_device_id = self.cidx_mapping[default_idx]
+        self.combobox.currentIndexChanged.connect(self.select_sound_device)
+        self.combobox.keyPressEvent = self.keyPressEvent
+
+    def select_sound_device(self, index):
+        cindex = self.combobox.currentIndex()
+        device_id = self.cidx_mapping[cindex]
+        if device_id != self.sound_monitor.current_device_id:
+            print(f"switch to device {self.sound_monitor.devices[device_id]['name']}")
+            self.sound_monitor.close()
+            self.sound_monitor.run(device_id)
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() == Qt.Key_Space:
@@ -136,7 +171,7 @@ class GUI(QWidget):
         return diff_image
 
     def load_video(self, path, q=None):
-        fp = gzip.open(path, "rb")  # 91 94 95 97
+        fp = gzip.open(path, "rb")
         print(f"loading file {path}")
         mtd = pickle.load(fp)
         print(f"finish loading file")
@@ -171,9 +206,12 @@ class GUI(QWidget):
 
     def start_full_screen(self):
         self.instruction.hide()
+        self.combobox.hide()
         self.fullscreen_state = True
         self.showFullScreen()
-        screen = QApplication.primaryScreen()
+
+        screen = QGuiApplication.screenAt(self.mapToGlobal(QPoint(0, 0)))
+
         full_width = screen.size().width()
         full_height = screen.size().height()
         size = min([full_width, full_height])
@@ -190,6 +228,7 @@ class GUI(QWidget):
 
         self.canvas.move(*self.default_img_loc)
         self.instruction.show()
+        self.combobox.show()
 
         if self.enable_profile:
             s = io.StringIO()
@@ -352,11 +391,14 @@ class GUI(QWidget):
 
 
 class SoundMonitor:
-    def __init__(self, gui: GUI):
+    def __init__(self, gui: GUI, max_fps: int):
         self.gui = gui
         self.last_n = []
         self.callback_count = 0
         self.now = None
+        self.devices = sd.query_devices()
+        self.current_device_id = None
+        self.max_fps = max_fps
 
     def callback(self, indata, frames, ctime, status):
         amplitude = np.mean(abs(indata))
@@ -383,14 +425,23 @@ class SoundMonitor:
                 print(f"frame per second {100 / elapsed}")
             self.now = time.time()
 
-    def run(self):
+    def run(self, device_id):
+        self.current_device_id = device_id
+        device = self.devices[self.current_device_id]
+        samplerate = device["default_samplerate"]
+        channels = device["max_input_channels"]
+        blocksize = int(samplerate // self.max_fps)
         self.stream = sd.InputStream(
-            samplerate=16000, channels=2, callback=self.callback, blocksize=300
+            samplerate=samplerate,
+            channels=channels,
+            callback=self.callback,
+            blocksize=blocksize,
+            device=device["name"],
         )
         self.stream.start()
 
-    def stop(self):
-        self.stream.stop()
+    def close(self):
+        self.stream.close()
 
 
 if __name__ == "__main__":
@@ -400,8 +451,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     icon_dir = os.path.join(file_dir, "../../v_machine_icon.gif")
     app.setWindowIcon(QtGui.QIcon(icon_dir))
-    gui = GUI(video_dir=video_dir)
-    sm = SoundMonitor(gui)
-    sm.run()
+    gui = GUI(video_dir=video_dir, max_fps=max_fps)
+    sm = SoundMonitor(gui, max_fps=max_fps)
+    gui.set_sound_monitor(sm)
+    sm.run(sm.current_device_id)
     gui.show()
     app.exec_()
