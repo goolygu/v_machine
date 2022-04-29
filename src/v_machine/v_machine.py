@@ -11,7 +11,6 @@ import sys
 import time
 from functools import lru_cache
 from multiprocessing import Process, Queue
-from pstats import SortKey
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
@@ -232,8 +231,7 @@ class GUI(QWidget):
 
         if self.enable_profile:
             s = io.StringIO()
-            sortby = SortKey.CUMULATIVE
-            ps = pstats.Stats(self.pr, stream=s).sort_stats(sortby)
+            ps = pstats.Stats(self.pr, stream=s).sort_stats('cumulative')
             ps.print_stats()
             print(s.getvalue())
         return

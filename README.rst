@@ -26,4 +26,4 @@ Activate virtual environment and run the following command to start
 .. code-block:: console
 
     $ source venv/bin/activate
-    $ python v_machine.py
+    $ python src/v_machine/v_machine.py
