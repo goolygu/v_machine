@@ -216,7 +216,7 @@ class GUI(QWidget):
         size = min([full_width, full_height])
         self.image_size = (size, size)
         self.canvas.resize(*self.image_size)
-        self.canvas.move((full_width - size) / 2, (full_height - size) / 2)
+        self.canvas.move(int((full_width - size) / 2), int((full_height - size) / 2))
         return
 
     def end_fullscreen(self):
@@ -231,7 +231,7 @@ class GUI(QWidget):
 
         if self.enable_profile:
             s = io.StringIO()
-            ps = pstats.Stats(self.pr, stream=s).sort_stats('cumulative')
+            ps = pstats.Stats(self.pr, stream=s).sort_stats("cumulative")
             ps.print_stats()
             print(s.getvalue())
         return
@@ -391,7 +391,7 @@ class GUI(QWidget):
 class SoundMonitor:
     def __init__(self, gui: GUI, max_fps: int):
         self.gui = gui
-        self.last_n = []
+        self.last_n = [0]
         self.callback_count = 0
         self.now = None
         self.devices = sd.query_devices()
@@ -455,3 +455,4 @@ if __name__ == "__main__":
     sm.run(sm.current_device_id)
     gui.show()
     app.exec_()
+    sm.close()
