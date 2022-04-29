@@ -14,10 +14,11 @@ from multiprocessing import Process, Queue
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QComboBox
-from PyQt5.Qt import Qt, QPoint
-from PyQt5 import QtGui
-from PyQt5.QtGui import QGuiApplication
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QComboBox
+from PyQt6.QtCore import Qt, QPoint
+from PyQt6 import QtGui
+from PyQt6.QtGui import QGuiApplication
+from PIL.ImageQt import ImageQt
 
 
 def get_key_frame_array(key_frame_buffer):
@@ -75,10 +76,9 @@ class GUI(QWidget):
         self.combobox.show()
 
         orig_img = Image.fromarray(self.current_frame)
-        img = orig_img.resize(self.image_size, Image.HAMMING)
-        qim = QtGui.QImage(
-            img.tobytes("raw", "RGB"), img.width, img.height, QtGui.QImage.Format_RGB888
-        )
+        img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
+
+        qim = ImageQt(img)
         self.canvas.setPixmap(QtGui.QPixmap.fromImage(qim))
 
         self.fullscreen_state = False
@@ -124,17 +124,17 @@ class GUI(QWidget):
             self.sound_monitor.run(device_id)
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
-        if event.key() == Qt.Key_Space:
+        if event.key() == Qt.Key.Key_Space:
             self.toggle_fullscreen()
-        elif event.key() == Qt.Key_Right:
+        elif event.key() == Qt.Key.Key_Right:
             self.right()
-        elif event.key() == Qt.Key_Left:
+        elif event.key() == Qt.Key.Key_Left:
             self.left()
-        elif event.key() == Qt.Key_Up:
+        elif event.key() == Qt.Key.Key_Up:
             self.up()
-        elif event.key() == Qt.Key_Down:
+        elif event.key() == Qt.Key.Key_Down:
             self.down()
-        elif event.key() == Qt.Key_Escape:
+        elif event.key() == Qt.Key.Key_Escape:
             self.end_fullscreen()
 
     def clear_mtd_memory(self):
@@ -216,7 +216,7 @@ class GUI(QWidget):
         size = min([full_width, full_height])
         self.image_size = (size, size)
         self.canvas.resize(*self.image_size)
-        self.canvas.move((full_width - size) / 2, (full_height - size) / 2)
+        self.canvas.move(int((full_width - size) / 2), int((full_height - size) / 2))
         return
 
     def end_fullscreen(self):
@@ -367,12 +367,9 @@ class GUI(QWidget):
             enhancer = ImageEnhance.Brightness(orig_img)
             orig_img = enhancer.enhance(self.brightness)
 
-        img = orig_img.resize(self.image_size, Image.NEAREST)
+        img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
 
-        qim = QtGui.QImage(
-            img.tobytes("raw", "RGB"), img.width, img.height, QtGui.QImage.Format_RGB888
-        )
-
+        qim = ImageQt(img)
         current_t = time.time()
         elapsed = current_t - self._previous_t
         sleep_time = max(1 / self.max_fps - elapsed - self._estimated_image_time, 0)
@@ -391,7 +388,7 @@ class GUI(QWidget):
 class SoundMonitor:
     def __init__(self, gui: GUI, max_fps: int):
         self.gui = gui
-        self.last_n = []
+        self.last_n = [0]
         self.callback_count = 0
         self.now = None
         self.devices = sd.query_devices()
@@ -454,4 +451,5 @@ if __name__ == "__main__":
     gui.set_sound_monitor(sm)
     sm.run(sm.current_device_id)
     gui.show()
-    app.exec_()
+    app.exec()
+    sm.close()

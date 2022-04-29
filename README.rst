@@ -12,9 +12,20 @@ Quickstart
 ==========
 Create virtual environment and install v_machine
 
+First download repository.
+
 .. code-block:: console
 
     $ git clone https://github.com/goolygu/v_machine.git
+
+Switch to Qt6 branch if running on Apple silicon.
+
+.. code-block:: console
+    $ git checkout qt6
+
+Make virtual environment and install packages.
+
+.. code-block:: console
     $ cd v_machine
     $ make venv
 
