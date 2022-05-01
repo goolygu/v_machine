@@ -33,7 +33,7 @@ For Linux users, you may need to install portaudio.
 
 .. code-block:: console
 
-    $sudo apt-get install libportaudio2
+    $ sudo apt-get install libportaudio2
 
 
 Make virtual environment and install packages.
