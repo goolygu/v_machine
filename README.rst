@@ -1,8 +1,8 @@
 Visual Loop Machine
 ###################
 
-| Visual Loop Machine plays visual loops stored in the MTD (Multiple Temporal Dimension) video format. The visual loop
-| changes according to the loudness of the audio playing on the same computer.
+Visual Loop Machine plays visual loops stored in the MTD (Multiple Temporal Dimension) video format. The visual loop
+changes according to the loudness of the audio playing on the same computer.
 
 .. image:: gui.png
 
