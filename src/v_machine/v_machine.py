@@ -15,7 +15,7 @@ import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QComboBox
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtCore import Qt, QPoint, pyqtSignal
 from PyQt6 import QtGui
 from PyQt6.QtGui import QGuiApplication
 
@@ -36,13 +36,17 @@ def load_video(path, q=None):
 
 
 def pil_to_pixmap(im):
-    data = im.tobytes("raw", "RGB")
-    qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format.Format_RGB888)
+    im = im.convert("RGBA")
+    data = im.tobytes("raw", "RGBA")
+    qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format.Format_RGBA8888)
     pixmap = QtGui.QPixmap.fromImage(qim)
     return pixmap
 
 
 class GUI(QWidget):
+
+    signal = pyqtSignal(int, int)
+
     def __init__(
         self,
         video_dir,
@@ -93,12 +97,12 @@ class GUI(QWidget):
         self.combobox.show()
 
         orig_img = Image.fromarray(self.current_frame)
+
         img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
 
         self.canvas.setPixmap(pil_to_pixmap(img))
 
         self.fullscreen_state = False
-        self.next = False
         self.dim_1_dir = 0
         self.dim_0_dir = 0
         self.threshold = 0.9
@@ -110,8 +114,6 @@ class GUI(QWidget):
         self.brightness = 1
         self.pause = False
         self.max_fps = max_fps
-        self._previous_t = time.time()
-        self._estimated_image_time = 0
         self.previous_canvas_size = None
 
         self.sound_monitor = None
@@ -375,17 +377,8 @@ class GUI(QWidget):
 
         img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
 
-        current_t = time.time()
-        elapsed = current_t - self._previous_t
-        sleep_time = max(1 / self.max_fps - elapsed - self._estimated_image_time, 0)
-        time.sleep(sleep_time)
-
-        t_start = time.time()
         self.canvas.setPixmap(pil_to_pixmap(img))
-        self._estimated_image_time = time.time() - t_start
-        self._previous_t = time.time()
 
-        self.next = False
         if self.fullscreen_state and self.enable_profile:
             self.pr.disable()
 
@@ -393,6 +386,7 @@ class GUI(QWidget):
 class SoundMonitor:
     def __init__(self, gui: GUI, max_fps: int):
         self.gui = gui
+        self.signal = gui.signal
         self.last_n = [0]
         self.callback_count = 0
         self.now = None
@@ -414,7 +408,7 @@ class SoundMonitor:
         if 5 * amplitude > random.random() * self.gui.threshold:
             dim_0_dir = 1
 
-        self.gui.update(dim_1_dir=dim_1_dir, dim_0_dir=dim_0_dir)
+        self.signal.emit(dim_1_dir, dim_0_dir)
         self.last_n.append(amplitude)
         self.last_n = self.last_n[-200:]
 
@@ -453,6 +447,7 @@ if __name__ == "__main__":
     app.setWindowIcon(QtGui.QIcon(icon_dir))
     gui = GUI(video_dir=video_dir, max_fps=max_fps)
     sm = SoundMonitor(gui, max_fps=max_fps)
+    sm.signal.connect(gui.update)
     gui.set_sound_monitor(sm)
     sm.run(sm.current_device_id)
     gui.show()
