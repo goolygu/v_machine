@@ -24,6 +24,17 @@ def get_key_frame_array(key_frame_buffer):
     return np.asarray(Image.open(key_frame_buffer), dtype=np.uint8)
 
 
+def load_video(path, q=None):
+    fp = gzip.open(path, "rb")
+    print(f"loading file {path}")
+    mtd = pickle.load(fp)
+    print(f"finish loading file")
+    fp.close()
+    if q is not None:
+        q.put(mtd)
+    return mtd
+
+
 class GUI(QWidget):
     def __init__(
         self,
@@ -37,7 +48,7 @@ class GUI(QWidget):
         self.all_video_paths = sorted(glob.glob(f"{video_dir}/*.mtd"))
         self.current_vid_idx = 0
         print("loading video")
-        mtd = self.load_video(self.all_video_paths[self.current_vid_idx])
+        mtd = load_video(self.all_video_paths[self.current_vid_idx])
         print("finish loading")
         self.mtd = None
         self.current_img_idx = None
@@ -169,16 +180,6 @@ class GUI(QWidget):
         ) * 2
         return diff_image
 
-    def load_video(self, path, q=None):
-        fp = gzip.open(path, "rb")
-        print(f"loading file {path}")
-        mtd = pickle.load(fp)
-        print(f"finish loading file")
-        fp.close()
-        if q is not None:
-            q.put(mtd)
-        return mtd
-
     def down(self):
         self.threshold += 0.1
         self.threshold = min(1.1, self.threshold)
@@ -248,7 +249,7 @@ class GUI(QWidget):
             print("loading video")
             self.q = Queue()
             p = Process(
-                target=self.load_video,
+                target=load_video,
                 args=(self.all_video_paths[self.current_vid_idx], self.q),
             )
             p.start()
