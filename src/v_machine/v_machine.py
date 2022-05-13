@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QComboBox
 from PyQt6.QtCore import Qt, QPoint
 from PyQt6 import QtGui
 from PyQt6.QtGui import QGuiApplication
-from PIL.ImageQt import ImageQt
 
 
 def get_key_frame_array(key_frame_buffer):
@@ -34,6 +33,13 @@ def load_video(path, q=None):
     if q is not None:
         q.put(mtd)
     return mtd
+
+
+def pil_to_pixmap(im):
+    data = im.tobytes("raw", "RGB")
+    qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format.Format_RGB888)
+    pixmap = QtGui.QPixmap.fromImage(qim)
+    return pixmap
 
 
 class GUI(QWidget):
@@ -89,8 +95,7 @@ class GUI(QWidget):
         orig_img = Image.fromarray(self.current_frame)
         img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
 
-        qim = ImageQt(img)
-        self.canvas.setPixmap(QtGui.QPixmap.fromImage(qim))
+        self.canvas.setPixmap(pil_to_pixmap(img))
 
         self.fullscreen_state = False
         self.next = False
@@ -370,14 +375,13 @@ class GUI(QWidget):
 
         img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
 
-        qim = ImageQt(img)
         current_t = time.time()
         elapsed = current_t - self._previous_t
         sleep_time = max(1 / self.max_fps - elapsed - self._estimated_image_time, 0)
         time.sleep(sleep_time)
 
         t_start = time.time()
-        self.canvas.setPixmap(QtGui.QPixmap.fromImage(qim))
+        self.canvas.setPixmap(pil_to_pixmap(img))
         self._estimated_image_time = time.time() - t_start
         self._previous_t = time.time()
 
