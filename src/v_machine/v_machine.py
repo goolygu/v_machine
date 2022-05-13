@@ -118,6 +118,8 @@ class GUI(QWidget):
 
         self.sound_monitor = None
         self.cidx_mapping = {}
+        self._update_count = 0
+        self._now = None
 
     def set_sound_monitor(self, sound_monitor):
         self.sound_monitor = sound_monitor
@@ -379,6 +381,15 @@ class GUI(QWidget):
 
         self.canvas.setPixmap(pil_to_pixmap(img))
 
+        self._update_count += 1
+
+        if self._update_count % 100 == 0:
+            if self._now is not None:
+                elapsed = time.time() - self._now
+                print(f"frame per second {100 / elapsed}")
+            self._now = time.time()
+            self._update_count = 0
+
         if self.fullscreen_state and self.enable_profile:
             self.pr.disable()
 
@@ -388,7 +399,6 @@ class SoundMonitor:
         self.gui = gui
         self.signal = gui.signal
         self.last_n = [0]
-        self.callback_count = 0
         self.now = None
         self.devices = sd.query_devices()
         self.current_device_id = None
@@ -411,13 +421,6 @@ class SoundMonitor:
         self.signal.emit(dim_1_dir, dim_0_dir)
         self.last_n.append(amplitude)
         self.last_n = self.last_n[-200:]
-
-        self.callback_count += 1
-        if self.callback_count % 100 == 0:
-            if self.now is not None:
-                elapsed = time.time() - self.now
-                print(f"frame per second {100 / elapsed}")
-            self.now = time.time()
 
     def run(self, device_id):
         self.current_device_id = device_id
