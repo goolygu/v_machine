@@ -10,7 +10,7 @@ import random
 import sys
 import time
 from functools import lru_cache
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, freeze_support
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
@@ -468,8 +468,8 @@ def get_video_directroy(file_dir: str):
         msg = QMessageBox()
         msg.setText(
             f"No MTD videos in directory {video_dir}. MTD Videos can be downloaded from "
-            f'<a href="https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing.">'
-            f" here. Loading example videos instead."
+            f'<a href="https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing">'
+            f" here.</a> Loading example videos instead."
         )
         msg.exec_()
         video_dir = os.path.join(sys._MEIPASS, "mtd_videos")
@@ -486,6 +486,7 @@ def get_icon_directory(file_dir: str):
 
 
 if __name__ == "__main__":
+    freeze_support()
     max_fps = 30
     file_dir = os.path.dirname(__file__)
     app = QApplication(sys.argv)
