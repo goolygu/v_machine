@@ -14,17 +14,20 @@ from multiprocessing import Process, Queue
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QComboBox
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QComboBox, QMessageBox
 from PyQt6.QtCore import Qt, QPoint, pyqtSignal
 from PyQt6 import QtGui
 from PyQt6.QtGui import QGuiApplication
+from type import mtd_video
+
+sys.modules["mtd_video"] = mtd_video
 
 
 def get_key_frame_array(key_frame_buffer):
     return np.asarray(Image.open(key_frame_buffer), dtype=np.uint8)
 
 
-def load_video(path, q=None):
+def load_video(path, q=None) -> mtd_video.MTDVideo:
     fp = gzip.open(path, "rb")
     print(f"loading file {path}")
     mtd = pickle.load(fp)
@@ -57,8 +60,11 @@ class GUI(QWidget):
         self.loading_stage = 0
         self.video_dir = video_dir
         self.all_video_paths = sorted(glob.glob(f"{video_dir}/*.mtd"))
+        if len(self.all_video_paths) == 0:
+            print(f"No MTD videos at {video_dir}")
+            return
         self.current_vid_idx = 0
-        print("loading video")
+        print(f"loading video from {video_dir}")
         mtd = load_video(self.all_video_paths[self.current_vid_idx])
         print("finish loading")
         self.mtd = None
@@ -408,14 +414,14 @@ class SoundMonitor:
         amplitude = np.mean(abs(indata))
         n_average = np.mean(self.last_n)
         dim_0_dir = 0
-        if amplitude < (n_average * (self.gui.threshold - 0.01)) or amplitude < 0.02:
+        if amplitude < (n_average * (self.gui.threshold - 0.01)) or amplitude < 0.001:
             dim_1_dir = 1
         elif amplitude > n_average * (self.gui.threshold + 0.01):
             dim_1_dir = -1
         else:
             dim_1_dir = 0
 
-        if 5 * amplitude > random.random() * self.gui.threshold:
+        if 10 * amplitude > random.random() * self.gui.threshold:
             dim_0_dir = 1
 
         self.signal.emit(dim_1_dir, dim_0_dir)
@@ -441,13 +447,50 @@ class SoundMonitor:
         self.stream.close()
 
 
+def get_video_directroy(file_dir: str):
+    default_video_dir = os.path.join(file_dir, "../../mtd_videos")
+    if os.path.isdir(default_video_dir):
+        return default_video_dir
+    else:
+        home_dir = os.path.expanduser("~")
+        if sys.platform == "linux" or sys.platform == "linux2":
+            video_dir = os.path.join(home_dir, "Videos/mtd_videos/")
+        elif sys.platform == "darwin":
+            video_dir = os.path.join(home_dir, "Movies/mtd_videos/")
+        elif sys.platform == "win32":
+            video_dir = os.path.join(home_dir, "Videos/mtd_videos/")
+
+    if not os.path.isdir(video_dir):
+        os.makedirs(video_dir)
+
+    num_videos = len(glob.glob(f"{video_dir}/*.mtd"))
+    if num_videos == 0:
+        msg = QMessageBox()
+        msg.setText(
+            f"No MTD videos in directory {video_dir}. MTD Videos can be downloaded from "
+            f'<a href="https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing.">'
+            f" here. Loading example videos instead."
+        )
+        msg.exec_()
+        video_dir = os.path.join(sys._MEIPASS, "mtd_videos")
+
+    return video_dir
+
+
+def get_icon_directory(file_dir: str):
+    default_icon_dir = os.path.join(file_dir, "../../v_machine_icon.gif")
+    if os.path.exists(default_icon_dir):
+        return default_icon_dir
+    icon_dir = os.path.join(sys._MEIPASS, "files/v_machine_icon.gif")
+    return icon_dir
+
+
 if __name__ == "__main__":
     max_fps = 30
     file_dir = os.path.dirname(__file__)
-    video_dir = os.path.join(file_dir, "../../mtd_videos")
     app = QApplication(sys.argv)
-    icon_dir = os.path.join(file_dir, "../../v_machine_icon.gif")
-    app.setWindowIcon(QtGui.QIcon(icon_dir))
+    app.setWindowIcon(QtGui.QIcon(get_icon_directory(file_dir)))
+    video_dir = get_video_directroy(file_dir)
     gui = GUI(video_dir=video_dir, max_fps=max_fps)
     sm = SoundMonitor(gui, max_fps=max_fps)
     sm.signal.connect(gui.update)
