@@ -471,7 +471,7 @@ def get_video_directroy(file_dir: str):
             f'<a href="https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing">'
             f" here.</a> Loading example videos instead."
         )
-        msg.exec_()
+        msg.exec()
         video_dir = os.path.join(sys._MEIPASS, "mtd_videos")
 
     return video_dir
