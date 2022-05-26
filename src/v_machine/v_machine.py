@@ -438,6 +438,7 @@ class SoundMonitor:
             callback=self.callback,
             blocksize=blocksize,
             device=device["name"],
+            latency="low"
         )
         self.stream.start()
 
