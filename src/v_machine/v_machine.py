@@ -14,10 +14,10 @@ from multiprocessing import Process, Queue, freeze_support
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QComboBox, QMessageBox
-from PyQt5.Qt import Qt, QPoint, pyqtSignal
-from PyQt5 import QtGui
-from PyQt5.QtGui import QGuiApplication
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QComboBox, QMessageBox
+from PyQt6.QtCore import Qt, QPoint, pyqtSignal
+from PyQt6 import QtGui
+from PyQt6.QtGui import QGuiApplication
 from type import mtd_video
 
 sys.modules["mtd_video"] = mtd_video
@@ -39,8 +39,9 @@ def load_video(path, q=None) -> mtd_video.MTDVideo:
 
 
 def pil_to_pixmap(im):
-    data = im.tobytes("raw", "RGB")
-    qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format.Format_RGB888)
+    im = im.convert("RGBA")
+    data = im.tobytes("raw", "RGBA")
+    qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format.Format_RGBA8888)
     pixmap = QtGui.QPixmap.fromImage(qim)
     return pixmap
 
@@ -102,7 +103,8 @@ class GUI(QWidget):
         self.combobox.show()
 
         orig_img = Image.fromarray(self.current_frame)
-        img = orig_img.resize(self.image_size, Image.HAMMING)
+
+        img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
 
         self.canvas.setPixmap(pil_to_pixmap(img))
 
@@ -148,17 +150,17 @@ class GUI(QWidget):
             self.sound_monitor.run(device_id)
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
-        if event.key() == Qt.Key_Space:
+        if event.key() == Qt.Key.Key_Space:
             self.toggle_fullscreen()
-        elif event.key() == Qt.Key_Right:
+        elif event.key() == Qt.Key.Key_Right:
             self.right()
-        elif event.key() == Qt.Key_Left:
+        elif event.key() == Qt.Key.Key_Left:
             self.left()
-        elif event.key() == Qt.Key_Up:
+        elif event.key() == Qt.Key.Key_Up:
             self.up()
-        elif event.key() == Qt.Key_Down:
+        elif event.key() == Qt.Key.Key_Down:
             self.down()
-        elif event.key() == Qt.Key_Escape:
+        elif event.key() == Qt.Key.Key_Escape:
             self.end_fullscreen()
 
     def clear_mtd_memory(self):
@@ -381,7 +383,7 @@ class GUI(QWidget):
             enhancer = ImageEnhance.Brightness(orig_img)
             orig_img = enhancer.enhance(self.brightness)
 
-        img = orig_img.resize(self.image_size, Image.NEAREST)
+        img = orig_img.resize(self.image_size, Image.Resampling.NEAREST)
 
         self.canvas.setPixmap(pil_to_pixmap(img))
 
@@ -470,7 +472,7 @@ def get_video_directroy(file_dir: str):
             f'<a href="https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing">'
             f" here.</a> Loading example videos instead."
         )
-        msg.exec_()
+        msg.exec()
         video_dir = os.path.join(sys._MEIPASS, "mtd_videos")
 
     return video_dir
@@ -497,5 +499,5 @@ if __name__ == "__main__":
     gui.set_sound_monitor(sm)
     sm.run(sm.current_device_id)
     gui.show()
-    app.exec_()
+    app.exec()
     sm.close()

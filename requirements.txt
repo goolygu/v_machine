@@ -1,4 +1,4 @@
 sounddevice>=0.4.4
 Pillow>=8.4.0
 numpy>=1.19.5
-PyQt5>=5.15.6
+PyQt6>=6.3.0
