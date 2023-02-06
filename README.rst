@@ -23,12 +23,6 @@ First download repository.
 
     $ git clone https://github.com/goolygu/v_machine.git
 
-Switch to Qt6 branch if running on Apple silicon.
-
-.. code-block:: console
-
-    $ git checkout qt6
-
 For Linux users, you may need to install portaudio.
 
 .. code-block:: console
