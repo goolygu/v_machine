@@ -5,12 +5,11 @@ import io
 import os
 import pickle
 import pstats
-import queue
 import random
 import sys
 import time
+import threading
 from functools import lru_cache
-from multiprocessing import Process, Queue, freeze_support
 import numpy as np
 import sounddevice as sd
 from PIL import Image, ImageEnhance
@@ -27,15 +26,17 @@ def get_key_frame_array(key_frame_buffer):
     return np.asarray(Image.open(key_frame_buffer), dtype=np.uint8)
 
 
-def load_video(path, q=None) -> mtd_video.MTDVideo:
+def load_video(path, idx, mtd_dict, lru_list, loading_indices, max_num_mtd=4) -> mtd_video.MTDVideo:
     fp = gzip.open(path, "rb")
     print(f"loading file {path}")
     mtd = pickle.load(fp)
     print(f"finish loading file")
     fp.close()
-    if q is not None:
-        q.put(mtd)
-    return mtd
+    mtd_dict[idx] = mtd
+    if len(mtd_dict) > max_num_mtd:
+        assert lru_list[0] != idx
+        mtd_dict.pop(lru_list[0])
+    loading_indices.remove(idx)
 
 
 def pil_to_pixmap(im):
@@ -44,6 +45,10 @@ def pil_to_pixmap(im):
     qim = QtGui.QImage(data, im.size[0], im.size[1], QtGui.QImage.Format.Format_RGBA8888)
     pixmap = QtGui.QPixmap.fromImage(qim)
     return pixmap
+
+
+class VideoNotReady(Exception):
+    pass
 
 
 class GUI(QWidget):
@@ -57,6 +62,9 @@ class GUI(QWidget):
         max_fps=30,
     ):
         super().__init__()
+        self.loading_indices = []
+        self.mtd_idx_lru_list = []
+        self.mtd_dict = {}
         self.loading_stage = 0
         self.video_dir = video_dir
         self.all_video_paths = sorted(glob.glob(f"{video_dir}/*.mtd"))
@@ -65,15 +73,24 @@ class GUI(QWidget):
             return
         self.current_vid_idx = 0
         print(f"loading video from {video_dir}")
-        mtd = load_video(self.all_video_paths[self.current_vid_idx])
+        self.pre_load_next_video(self.current_vid_idx)
+
         print("finish loading")
         self.mtd = None
         self.current_img_idx = None
         self.current_frame = None
         self.mtd_shape = None
         self.setStyleSheet("background-color: black;")
-        self.setWindowTitle("Visual Loop Machine by Li Yang Ku")
+        self.setWindowTitle("Visual Loop Machine")
+        mtd = None
+        while mtd is None:
+            try:
+                mtd = self.get_mtd_video(self.current_vid_idx)
+            except VideoNotReady:
+                time.sleep(0.5)
+
         self.setup_mtd_video(mtd)
+        self.pre_load_next_video(self.current_vid_idx + 1)
 
         self.image_size = (512, 512)
         self.resize(550, 630)
@@ -126,6 +143,7 @@ class GUI(QWidget):
         self.cidx_mapping = {}
         self._update_count = 0
         self._now = None
+
 
     def set_sound_monitor(self, sound_monitor):
         self.sound_monitor = sound_monitor
@@ -252,38 +270,72 @@ class GUI(QWidget):
             print(s.getvalue())
         return
 
-    def load_next_video(self, previous=False):
+    def pre_load_next_video(self, next_vid_idx):
+        if next_vid_idx in self.loading_indices:
+            return
+
+        if next_vid_idx in self.mtd_dict:
+            return
+
+        next_vid_idx = next_vid_idx % len(self.all_video_paths)
+        print("loading video")
+
+        self.loading_indices.append(next_vid_idx)
+
+        new_lru_list = []
+        for idx in self.mtd_idx_lru_list[::-1]:
+            if idx in self.mtd_dict and idx not in new_lru_list:
+                new_lru_list.append(idx)
+        for idx in self.mtd_dict.keys():
+            if idx not in new_lru_list:
+                new_lru_list.append(idx)
+
+        self.mtd_idx_lru_list = new_lru_list[::-1]
+
+        x = threading.Thread(target=load_video, args=(self.all_video_paths[next_vid_idx], next_vid_idx, self.mtd_dict, self.mtd_idx_lru_list, self.loading_indices))
+        x.start()
+
+    def get_mtd_video(self, idx):
+
+        if idx in self.mtd_dict:
+            self.mtd_idx_lru_list.append(idx)
+            return self.mtd_dict[idx]
+
+        self.pre_load_next_video(idx)
+        raise VideoNotReady
+
+    def load_next_video(self, previous=False, smooth_transition=True, transition_speed=0.2):
         if self.loading_stage == 0:
             self.loading_stage = 1
-
             if previous:
                 self.current_vid_idx -= 1
             else:
                 self.current_vid_idx += 1
+
             self.current_vid_idx = self.current_vid_idx % len(self.all_video_paths)
-            print("loading video")
-            self.q = Queue()
-            p = Process(
-                target=load_video,
-                args=(self.all_video_paths[self.current_vid_idx], self.q),
-            )
-            p.start()
+
         elif self.loading_stage == 1:
-            try:
-                self.brightness = max(self.brightness - 0.02, 0)
-                if self.brightness == 0:
-                    mtd = self.q.get(block=False)
+            if smooth_transition:
+                self.brightness = max(self.brightness - transition_speed, 0)
+            if self.brightness == 0 or not smooth_transition:
+                try:
+                    mtd = self.get_mtd_video(self.current_vid_idx)
                     self.setup_mtd_video(mtd)
                     self.loading_stage = 2
-            except queue.Empty:
-                time.sleep(0.1)
-                pass
+                except VideoNotReady:
+                    pass
+
         elif self.loading_stage == 2:
-            self.brightness = min(self.brightness + 0.02, 1)
-            if self.brightness == 1:
+            if smooth_transition:
+                self.brightness = min(self.brightness + transition_speed, 1)
+            if self.brightness == 1 or not smooth_transition:
                 self.load_next = False
                 self.load_previous = False
                 self.loading_stage = 0
+                if not previous:
+                    self.pre_load_next_video((self.current_vid_idx + 1) % len(self.all_video_paths))
+                else:
+                    self.pre_load_next_video((self.current_vid_idx - 1) % len(self.all_video_paths))
 
     def update(self, dim_1_dir=0, dim_0_dir=0):
         if self.load_next:
@@ -487,7 +539,6 @@ def get_icon_directory(file_dir: str):
 
 
 if __name__ == "__main__":
-    freeze_support()
     max_fps = 30
     file_dir = os.path.dirname(__file__)
     app = QApplication(sys.argv)
