@@ -500,29 +500,34 @@ class SoundMonitor:
         self.stream.close()
 
 
-def get_video_directroy(file_dir: str):
-    default_video_dir = os.path.join(file_dir, "../../mtd_videos")
-    if os.path.isdir(default_video_dir):
-        return default_video_dir
+def get_video_directroy(file_dir: str, app_store: bool = False):
+    if app_store:
+        user_name = os.getenv('USER')
+        video_dir = "/Users/" + user_name + "/Movies/mtd_videos"
     else:
-        home_dir = os.path.expanduser("~")
-        if sys.platform == "linux" or sys.platform == "linux2":
-            video_dir = os.path.join(home_dir, "Videos/mtd_videos/")
-        elif sys.platform == "darwin":
-            video_dir = os.path.join(home_dir, "Movies/mtd_videos/")
-        elif sys.platform == "win32":
-            video_dir = os.path.join(home_dir, "Videos/mtd_videos/")
+        default_video_dir = os.path.join(file_dir, "../../mtd_videos")
+        if os.path.isdir(default_video_dir):
+            return default_video_dir
+        else:
+            home_dir = os.path.expanduser("~")
+            if sys.platform == "linux" or sys.platform == "linux2":
+                video_dir = os.path.join(home_dir, "Videos/mtd_videos/")
+            elif sys.platform == "darwin":
+                video_dir = os.path.join(home_dir, "Movies/mtd_videos/")
+            elif sys.platform == "win32":
+                video_dir = os.path.join(home_dir, "Videos/mtd_videos/")
 
-    if not os.path.isdir(video_dir):
-        os.makedirs(video_dir)
-
-    num_videos = len(glob.glob(f"{video_dir}/*.mtd"))
+        if not os.path.isdir(video_dir):
+            os.makedirs(video_dir)
+    num_videos = 0
+    if os.path.isdir(video_dir):
+        num_videos = len(glob.glob(f"{video_dir}/*.mtd"))
     if num_videos == 0:
         msg = QMessageBox()
         msg.setText(
             f"No MTD videos in directory {video_dir}. MTD Videos can be downloaded from "
-            f'<a href="https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing">'
-            f" here.</a> Loading example videos instead."
+            f'<a href="https://visualloopmachine.liyangku.com/download-mtd-videos">'
+            f" here.</a> Loading low resolution demo videos instead."
         )
         msg.exec()
         video_dir = os.path.join(sys._MEIPASS, "mtd_videos")
