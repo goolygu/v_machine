@@ -2,7 +2,9 @@ Visual Loop Machine
 ###################
 
 Visual Loop Machine plays visual loops stored in the MTD (Multiple Temporal Dimension) video format. The visual loop
-changes according to the loudness of the audio playing on the same computer.
+changes according to the relative volume of the audio playing on the same computer or the sound caught on mic.
+
+Install file for mac now available at https://visualloopmachine.liyangku.com/
 
 .. image:: gui.png
 
@@ -38,7 +40,7 @@ Make virtual environment and install packages.
     $ make venv
 
 Place mtd videos to play under the mtd_video folder (Samples are provided.) You can download mtd videos
-created by me here https://drive.google.com/drive/folders/16wlG6fFPS-srPqVNeYKTvZyl0b4hTfPi?usp=sharing
+created by me here https://visualloopmachine.liyangku.com/download-mtd-videos
 
 Activate virtual environment and run the following command to start
 
