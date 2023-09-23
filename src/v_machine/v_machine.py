@@ -467,7 +467,7 @@ class GUI(QWidget):
                 expand_frame = np.zeros(new_frame_size, dtype=self.current_frame.dtype)
                 expand_frame[:, margin:margin+frame_size[1]] = self.current_frame
                 expand_frame[:, :margin] = self.current_frame[:, :margin][:, ::-1]
-                expand_frame[:, -margin:] = self.current_frame[:, -margin:][:, ::-1]
+                expand_frame[:, margin+frame_size[1]:margin*2+frame_size[1]] = self.current_frame[:, -margin:][:, ::-1]
                 orig_img = Image.fromarray(expand_frame)
             else:
                 frame_size = self.current_frame.shape
@@ -476,7 +476,7 @@ class GUI(QWidget):
                 expand_frame = np.zeros(new_frame_size, dtype=self.current_frame.dtype)
                 expand_frame[margin:margin+frame_size[0]] = self.current_frame
                 expand_frame[:margin] = self.current_frame[:margin][::-1]
-                expand_frame[-margin:] = self.current_frame[-margin:][::-1]
+                expand_frame[margin+frame_size[0]:margin*2+frame_size[0]] = self.current_frame[-margin:][::-1]
                 orig_img = Image.fromarray(expand_frame)
         else:
             orig_img = Image.fromarray(self.current_frame)
