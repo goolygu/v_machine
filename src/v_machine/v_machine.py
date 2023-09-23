@@ -93,7 +93,7 @@ class GUI(QWidget):
         self.pre_load_next_video(self.current_vid_idx + 1)
 
         self.image_size = (512, 512)
-        self.resize(550, 630)
+        self.resize(550, 660)
 
         self.canvas = QLabel(self)
         self.canvas.resize(*self.image_size)
@@ -104,13 +104,13 @@ class GUI(QWidget):
         self.instruction = QLabel(self)
 
         self.instruction.setText(
-            "→ next video, ← last video, ↑ increase change, ↓ decrease change\nSpace: toggle fullscreen, Esc: exit fullscreen\n\nInput source:"
+            "→ next video, ← last video, ↑ increase change, ↓ decrease change\nSpace: toggle fullscreen, Esc: exit fullscreen\n\nInput source:\n\nFullscreen setting:"
         )
         self.instruction.setStyleSheet("color: white;")
         self.instruction.move(*self.instruction_loc)
         self.instruction.show()
 
-        self.combobox_loc = [150, 590]
+        self.combobox_loc = [150, 585]
         self.combobox = QComboBox(self)
         self.combobox.move(*self.combobox_loc)
         self.combobox.resize(350, 30)
@@ -118,6 +118,20 @@ class GUI(QWidget):
             "color: #75F5CA; selection-color: white; selection-background-color: #4DCDA2"
         )
         self.combobox.show()
+
+        self.combobox_2_loc = [200, 618]
+        self.combobox_2 = QComboBox(self)
+        self.combobox_2.move(*self.combobox_2_loc)
+        self.combobox_2.resize(150, 30)
+        self.combobox_2.setStyleSheet(
+            "color: #75F5CA; selection-color: white; selection-background-color: #4DCDA2"
+        )
+        self.combobox_2.addItem("default")
+        self.combobox_2.addItem("mirror")
+        self.combobox_2.addItem("rescale")
+        self.combobox.keyPressEvent = self.keyPressEvent
+
+        self.combobox_2.show()
 
         orig_img = Image.fromarray(self.current_frame)
 
@@ -143,6 +157,7 @@ class GUI(QWidget):
         self.cidx_mapping = {}
         self._update_count = 0
         self._now = None
+        self.mirror = False
 
 
     def set_sound_monitor(self, sound_monitor):
@@ -240,6 +255,7 @@ class GUI(QWidget):
     def start_full_screen(self):
         self.instruction.hide()
         self.combobox.hide()
+        self.combobox_2.hide()
         self.fullscreen_state = True
         self.showFullScreen()
 
@@ -248,20 +264,30 @@ class GUI(QWidget):
         full_width = screen.size().width()
         full_height = screen.size().height()
         size = min([full_width, full_height])
-        self.image_size = (size, size)
-        self.canvas.resize(*self.image_size)
-        self.canvas.move(int((full_width - size) / 2), int((full_height - size) / 2))
+        if self.combobox_2.currentIndex() == 1:
+            self.mirror = True
+            self.image_size = (full_width, full_height)
+            self.canvas.resize(*self.image_size)
+        elif self.combobox_2.currentIndex() == 2:
+            self.image_size = (full_width, full_height)
+            self.canvas.resize(*self.image_size)
+        elif self.combobox_2.currentIndex() == 0:
+            self.image_size = (size, size)
+            self.canvas.resize(*self.image_size)
+            self.canvas.move(int((full_width - size) / 2), int((full_height - size) / 2))
         return
 
     def end_fullscreen(self):
         self.image_size = (512, 512)
         self.fullscreen_state = False
+        self.mirror = False
         self.showNormal()
         self.canvas.resize(*self.image_size)
 
         self.canvas.move(*self.default_img_loc)
         self.instruction.show()
         self.combobox.show()
+        self.combobox_2.show()
 
         if self.enable_profile:
             s = io.StringIO()
@@ -429,8 +455,31 @@ class GUI(QWidget):
                 ).astype(np.uint8)
 
         self.current_img_idx = target_img_idx
-
-        orig_img = Image.fromarray(self.current_frame)
+        if self.mirror:
+            ratio = self.image_size[0] / self.image_size[1]
+            print(ratio)
+            if ratio == 1:
+                orig_img = Image.fromarray(self.current_frame)
+            elif ratio > 0:
+                frame_size = self.current_frame.shape
+                new_frame_size = [frame_size[0], int(frame_size[1] * ratio), frame_size[2]]
+                margin = (new_frame_size[1] - frame_size[1]) // 2
+                expand_frame = np.zeros(new_frame_size, dtype=self.current_frame.dtype)
+                expand_frame[:, margin:margin+frame_size[1]] = self.current_frame
+                expand_frame[:, :margin] = self.current_frame[:, :margin][:, ::-1]
+                expand_frame[:, -margin:] = self.current_frame[:, -margin:][:, ::-1]
+                orig_img = Image.fromarray(expand_frame)
+            else:
+                frame_size = self.current_frame.shape
+                new_frame_size = [int(frame_size[0] / ratio), frame_size[1], frame_size[2]]
+                margin = (new_frame_size[0] - frame_size[0]) // 2
+                expand_frame = np.zeros(new_frame_size, dtype=self.current_frame.dtype)
+                expand_frame[margin:margin+frame_size[0]] = self.current_frame
+                expand_frame[:margin] = self.current_frame[:margin][::-1]
+                expand_frame[-margin:] = self.current_frame[-margin:][::-1]
+                orig_img = Image.fromarray(expand_frame)
+        else:
+            orig_img = Image.fromarray(self.current_frame)
         if self.brightness != 1:
             enhancer = ImageEnhance.Brightness(orig_img)
             orig_img = enhancer.enhance(self.brightness)
