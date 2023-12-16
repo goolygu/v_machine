@@ -117,6 +117,7 @@ class GUI(QWidget):
         self.combobox.setStyleSheet(
             "color: #75F5CA; selection-color: white; selection-background-color: #4DCDA2"
         )
+        self.combobox.keyPressEvent = self.keyPressEvent
         self.combobox.show()
 
         self.combobox_2_loc = [200, 618]
@@ -129,8 +130,7 @@ class GUI(QWidget):
         self.combobox_2.addItem("default")
         self.combobox_2.addItem("mirror")
         self.combobox_2.addItem("rescale")
-        self.combobox.keyPressEvent = self.keyPressEvent
-
+        self.combobox_2.keyPressEvent = self.keyPressEvent
         self.combobox_2.show()
 
         orig_img = Image.fromarray(self.current_frame)
